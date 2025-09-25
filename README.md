@@ -35,6 +35,10 @@ Example workflow with DeJPG:
 
 
 # Changelog
+### v3.2.0:
+- Improved memory managment
+- Added a Purge Cache button
+
 ### v3.0.0:
 - Batch Image input is now supported.
 	- Reapply_transparency is automatically, internally set to False when receiving batches of images.
