@@ -23,7 +23,7 @@ Example workflow with DeJPG:
 - Create a folder named 'Aura-SR' inside '\models'.
   	- Alternatively, you can specify a (single) custom model location using ComfyUI's 'extra_model_paths.yaml' file with an entry exactly named as 'aura-sr'.
 - Download the .safetensors AND config.json files from [HuggingFace](https://huggingface.co/fal/AuraSR/tree/main) and place them in '\models\Aura-SR'
-	- V2 version of the model is available here: [link](https://huggingface.co/fal/AuraSR-v2/tree/main) (seems better in some cases and much worse at others - do not use DeJPG (and similar models) with it! I'll personally just stick with V1 for now).
+	- V2 version of the model is available here: [link](https://huggingface.co/fal/AuraSR-v2/tree/main) (seems better in some cases - do not use DeJPG (and similar models) with it!).
 - (Optional) Rename the model to whatever you want and rename the config file to the same name as the model (this allows for future, multiple models with their own unique configs).
 - Install with ComfyUI Manager, restart then reload the browser's page.
 - Add Node > AuraSR > AuraSR Upscaler
