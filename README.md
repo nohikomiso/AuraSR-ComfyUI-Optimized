@@ -36,7 +36,7 @@ Example workflow with DeJPG:
 
 # Changelog
 ### v3.2.0:
-- Improved memory managment
+- Improved memory management
 - Added a Purge Cache button
 
 ### v3.0.0:
