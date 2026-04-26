@@ -81,8 +81,6 @@ class AuraSRUpscaler:
                              "mode": (["4x", "4x_overlapped_checkboard", "4x_overlapped_constant"],),
                              "reapply_transparency": ("BOOLEAN", {"default": True}),
                              "tile_batch_size": ("INT", {"default": 8, "min": 1, "max": 32}),
-                             "device": (["default", "cpu"],),
-                             "offload_to_cpu": ("BOOLEAN", {"default": False}),
             },
             "optional": {
                 "transparency_mask": ("MASK",),
@@ -99,9 +97,7 @@ class AuraSRUpscaler:
         self.model_name = ""
         self.aura_sr = None
         self.upscaling_factor = 4
-        self.device_warned = False
         self.config = None
-        self.device = "cpu"
         self.patcher = None
     
     def _clear_module_weights(self, module):
@@ -174,7 +170,7 @@ class AuraSRUpscaler:
         
         
     
-    def load(self, model_name, device):
+    def load(self, model_name):
         model_path = folder_paths.get_full_path("aura-sr", model_name)
         self.config = get_config(model_path)
         if self.config is None:
@@ -212,7 +208,6 @@ class AuraSRUpscaler:
         
         self.loaded = True
         self.model_name = model_name
-        self.device = device
 
         # store a hard reference in cache so other nodes can reuse the loaded model
         try:
@@ -220,7 +215,7 @@ class AuraSRUpscaler:
         except Exception:
             pass
     
-    def load_from_memory(self, cl, device):
+    def load_from_memory(self, cl):
         # reuse the AuraSR instance from another cached class
         self.loaded = True
         self.model_name = cl.model_name
@@ -229,20 +224,8 @@ class AuraSRUpscaler:
         self.upscaling_factor = cl.upscaling_factor
         self.device_warned = cl.device_warned
         self.config = cl.config
-        self.device = device
     
-    def main(self, model_name, image, mode, reapply_transparency, tile_batch_size, device, offload_to_cpu, transparency_mask=None):
-        # set device
-        torch_device = model_management.get_torch_device()
-        if model_management.directml_enabled:
-            if device == "default" and not self.device_warned:
-                print("[AuraSR-ComfyUI] Cannot run AuraSR on DirectML device. Using CPU instead (this will be VERY SLOW!)")
-                self.device_warned = True
-            device = "cpu"
-        else:
-            device = torch_device if device == "default" else "cpu"
-            device = device if str(device).lower() != "cpu" else "cpu"
-
+    def main(self, model_name, image, mode, reapply_transparency, tile_batch_size, transparency_mask=None, **kwargs):
         # load/unload model
         class_in_memory = get_model_from_cache(model_name)
         if (not self.loaded) or (self.model_name != model_name):
@@ -252,10 +235,10 @@ class AuraSRUpscaler:
                     self.unload()
                 except Exception:
                     pass
-                self.load(model_name, device)
+                self.load(model_name)
             else:
                 # reuse existing loaded model
-                self.load_from_memory(class_in_memory, device)
+                self.load_from_memory(class_in_memory)
             if self.config is None:
                 print("[AuraSR-ComfyUI] Could not find a config/ModelName .json file! Please download it from the model's HF page and place it according to the instructions (https://github.com/GreenLandisaLie/AuraSR-ComfyUI?tab=readme-ov-file#instructions).\nReturning original image.")
                 return (image, )
