@@ -133,9 +133,20 @@ class Attend(nn.Module):
         self.attn_dropout = nn.Dropout(dropout)
         self.scale = nn.Parameter(torch.randn(1))
         self.flash = flash
+        self.attn_mode = "auto" # "auto", "sdpa", "flash_attn", "sage_attn"
 
     def flash_attn(self, q, k, v):
         q, k, v = map(lambda t: t.contiguous(), (q, k, v))
+        
+        # Use ComfyUI style or explicit SDPA
+        if self.attn_mode == "sage_attn":
+            try:
+                from sage_attn import sage_attn
+                return sage_attn(q, k, v)
+            except ImportError:
+                pass
+        
+        # Default to PyTorch SDPA
         out = F.scaled_dot_product_attention(
             q, k, v, dropout_p=self.dropout if self.training else 0.0
         )
@@ -832,6 +843,15 @@ class AuraSR:
     #    return model
 
     @torch.no_grad()
+    def set_attention_mode(self, mode):
+        """Set attention mode for all Attend modules in the upsampler."""
+        self.attn_mode = mode
+        for module in self.upsampler.modules():
+            if isinstance(module, Attend):
+                module.attn_mode = mode
+                module.flash = (mode != "math")
+
+    @torch.no_grad()
     def upscale_4x(self, image: Image.Image, max_batch_size=8) -> Image.Image:
         tensor_transform = transforms.ToTensor()
         device = self.upsampler.device
@@ -856,9 +876,15 @@ class AuraSR:
                 lowres_image=model_input,
                 noise=torch.randn(model_input.shape[0], 128, device=device).to(next(self.upsampler.parameters()).dtype)
             )
-            reconstructed_tiles.extend(list(generator_output.clamp_(0, 1).detach().cpu()))
+            # Keep on GPU for now, or use non-blocking transfer
+            reconstructed_tiles.append(generator_output.clamp_(0, 1).detach())
 
-        merged_tensor = merge_tiles(reconstructed_tiles, h_chunks, w_chunks, self.input_image_size * 4)
+        # Move to CPU in bulk
+        reconstructed_tiles_cpu = []
+        for t in reconstructed_tiles:
+            reconstructed_tiles_cpu.extend(list(t.cpu()))
+            
+        merged_tensor = merge_tiles(reconstructed_tiles_cpu, h_chunks, w_chunks, self.input_image_size * 4)
         unpadded = merged_tensor[:, :h * 4, :w * 4]
 
         to_pil = transforms.ToPILImage()
@@ -902,12 +928,15 @@ class AuraSR:
                     lowres_image=model_input,
                     noise=torch.randn(model_input.shape[0], 128, device=device).to(next(self.upsampler.parameters()).dtype),
                 )
-                reconstructed_tiles.extend(
-                    list(generator_output.clamp_(0, 1).detach().cpu())
-                )
+                reconstructed_tiles.append(generator_output.clamp_(0, 1).detach())
+
+            # Move to CPU in bulk
+            reconstructed_tiles_cpu = []
+            for t in reconstructed_tiles:
+                reconstructed_tiles_cpu.extend(list(t.cpu()))
 
             return merge_tiles(
-                reconstructed_tiles, h_chunks, w_chunks, self.input_image_size * 4
+                reconstructed_tiles_cpu, h_chunks, w_chunks, self.input_image_size * 4
             )
 
         # First pass

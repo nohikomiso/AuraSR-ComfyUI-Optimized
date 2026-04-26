@@ -246,6 +246,15 @@ class AuraSRUpscaler:
         # Ask ComfyUI to load the model into GPU (it will manage VRAM and offload others if needed)
         model_management.load_models_gpu([self.patcher])
         
+        # Sync attention optimization settings from ComfyUI core
+        attn_mode = "sdpa"
+        if model_management.sage_attention_enabled():
+            attn_mode = "sage_attn"
+        elif model_management.flash_attention_enabled():
+            attn_mode = "flash_attn"
+            
+        self.aura_sr.set_attention_mode(attn_mode)
+        
         # iterate through images input
         upscaled_images = []
         
