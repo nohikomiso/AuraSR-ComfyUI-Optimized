@@ -619,6 +619,11 @@ class UnetUpsampler(torch.nn.Module):
     @property
     def device(self):
         return next(self.parameters()).device
+        
+    @device.setter
+    def device(self, value):
+        # Dummy setter to allow ComfyUI's ModelPatcher to assign device
+        pass
 
     @property
     def total_params(self):

@@ -102,6 +102,7 @@ class AuraSRUpscaler:
         self.device_warned = False
         self.config = None
         self.device = "cpu"
+        self.patcher = None
     
     def _clear_module_weights(self, module):
         # helper to free parameters/buffers on a module
@@ -135,7 +136,7 @@ class AuraSRUpscaler:
                         pass
                 # drop aura_sr reference
                 self.aura_sr = None
-                del self.aura_sr
+                self.patcher = None
         except Exception:
             pass
 
@@ -187,14 +188,19 @@ class AuraSRUpscaler:
         
         checkpoint = comfy.utils.load_torch_file(model_path, safe_load=True)
         
-        # create AuraSR and load weights
-        self.aura_sr = AuraSR(config=self.config, device=device)
+        # create AuraSR and load weights (initially on CPU)
+        self.aura_sr = AuraSR(config=self.config, device="cpu")
         # ensure no gradients are tracked
         try:
             self.aura_sr.upsampler.load_state_dict(checkpoint, strict=True)
-            if str(device).lower() != "cpu":
-                self.aura_sr.upsampler.half()
-                print(f"[AuraSR-ComfyUI] Model casted to FP16 (Half Precision) on {device}")
+            self.aura_sr.upsampler.half()
+            print(f"[AuraSR-ComfyUI] Model casted to FP16 (Half Precision)")
+            
+            # Wrap with ComfyUI's ModelPatcher for automatic VRAM management
+            from comfy.model_patcher import ModelPatcher
+            load_device = model_management.get_torch_device()
+            offload_device = model_management.unet_offload_device()
+            self.patcher = ModelPatcher(self.aura_sr.upsampler, load_device=load_device, offload_device=offload_device)
             #self.aura_sr.upsampler.eval()
             #for p in self.aura_sr.upsampler.parameters():
             #    p.requires_grad = False
@@ -219,16 +225,10 @@ class AuraSRUpscaler:
         self.loaded = True
         self.model_name = cl.model_name
         self.aura_sr = cl.aura_sr
+        self.patcher = cl.patcher
         self.upscaling_factor = cl.upscaling_factor
         self.device_warned = cl.device_warned
         self.config = cl.config
-        # move model if devices differ
-        if device != cl.device and self.aura_sr is not None:
-            try:
-                self.aura_sr.upsampler.to(device)
-            except Exception:
-                pass
-            cl.device = device
         self.device = device
     
     def main(self, model_name, image, mode, reapply_transparency, tile_batch_size, device, offload_to_cpu, transparency_mask=None):
@@ -259,16 +259,9 @@ class AuraSRUpscaler:
             if self.config is None:
                 print("[AuraSR-ComfyUI] Could not find a config/ModelName .json file! Please download it from the model's HF page and place it according to the instructions (https://github.com/GreenLandisaLie/AuraSR-ComfyUI?tab=readme-ov-file#instructions).\nReturning original image.")
                 return (image, )
-        else:
-            # if device changed, move model
-            if self.device != device and self.aura_sr is not None:
-                try:
-                    self.aura_sr.upsampler.to(device)
-                    self.device = device
-                    if class_in_memory is not None:
-                        class_in_memory.device = device
-                except Exception:
-                    pass
+        
+        # Ask ComfyUI to load the model into GPU (it will manage VRAM and offload others if needed)
+        model_management.load_models_gpu([self.patcher])
         
         # iterate through images input
         upscaled_images = []
@@ -309,16 +302,9 @@ class AuraSRUpscaler:
         # create output tensor from list of tensors
         output = torch.cat(upscaled_images, dim=0)
         
-        # offload to cpu if requested
-        if offload_to_cpu and self.aura_sr is not None:
-            try:
-                self.aura_sr.upsampler.to('cpu')
-                self.device = 'cpu'
-                cached = MODEL_CACHE.get(self.model_name)
-                if cached is not None:
-                    cached.device = 'cpu'
-            except Exception:
-                pass
+        # We no longer manually offload to CPU. ComfyUI handles this automatically via ModelPatcher.
+        if offload_to_cpu:
+            pass # Kept parameter to not break existing workflows
 
         # force unload when inference fails (any of the images failed)
         if any_inference_failed:
