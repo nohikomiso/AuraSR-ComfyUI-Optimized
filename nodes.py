@@ -285,9 +285,6 @@ class AuraSRUpscaler:
         # create output tensor from list of tensors
         output = torch.cat(upscaled_images, dim=0)
         
-        # We no longer manually offload to CPU. ComfyUI handles this automatically via ModelPatcher.
-        if offload_to_cpu:
-            pass # Kept parameter to not break existing workflows
 
         # force unload when inference fails (any of the images failed)
         if any_inference_failed:
