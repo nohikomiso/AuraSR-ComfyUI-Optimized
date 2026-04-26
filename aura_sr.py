@@ -846,7 +846,7 @@ class AuraSR:
         reconstructed_tiles = []
 
         for batch in batches:
-            model_input = torch.stack(batch).to(device)
+            model_input = torch.stack(batch).to(device).to(self.upsampler.dtype)
             generator_output = self.upsampler(
                 lowres_image=model_input,
                 noise=torch.randn(model_input.shape[0], 128, device=device)
@@ -892,7 +892,7 @@ class AuraSR:
             reconstructed_tiles = []
 
             for batch in batches:
-                model_input = torch.stack(batch).to(device)
+                model_input = torch.stack(batch).to(device).to(self.upsampler.dtype)
                 generator_output = self.upsampler(
                     lowres_image=model_input,
                     noise=torch.randn(model_input.shape[0], 128, device=device),

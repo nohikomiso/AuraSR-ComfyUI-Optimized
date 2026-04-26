@@ -192,6 +192,8 @@ class AuraSRUpscaler:
         # ensure no gradients are tracked
         try:
             self.aura_sr.upsampler.load_state_dict(checkpoint, strict=True)
+            if str(device).lower() != "cpu":
+                self.aura_sr.upsampler.half()
             #self.aura_sr.upsampler.eval()
             #for p in self.aura_sr.upsampler.parameters():
             #    p.requires_grad = False
