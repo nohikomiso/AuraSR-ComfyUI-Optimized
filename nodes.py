@@ -194,6 +194,7 @@ class AuraSRUpscaler:
             self.aura_sr.upsampler.load_state_dict(checkpoint, strict=True)
             if str(device).lower() != "cpu":
                 self.aura_sr.upsampler.half()
+                print(f"[AuraSR-ComfyUI] Model casted to FP16 (Half Precision) on {device}")
             #self.aura_sr.upsampler.eval()
             #for p in self.aura_sr.upsampler.parameters():
             #    p.requires_grad = False
