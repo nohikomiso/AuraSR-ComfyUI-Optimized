@@ -254,6 +254,7 @@ class AuraSRUpscaler:
             attn_mode = "flash_attn"
             
         self.aura_sr.set_attention_mode(attn_mode)
+        print(f"[AuraSR-ComfyUI] Optimized Attention Backend: {attn_mode}")
         
         # iterate through images input
         upscaled_images = []
